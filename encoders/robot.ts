@@ -1,11 +1,13 @@
-import { encoderFunction, mode, sampleFunction, sampleTuple } from '../lib/types'
-import { resizeImage, rgb2yuv, yuv2freq } from '../lib/utils'
+import { encoderFunction, mode, sampleTuple } from '../lib/types'
+import { rgb2yuv, yuv2freq } from '../lib/utils'
 
 const robotEncoder: encoderFunction = async (selectedMode, img, encoder) => {
-    if(encoder.resizeImage) img = resizeImage(img, null, 240, encoder.objectFit)
+    if(encoder.resizeImage) {
+        img.resize(320, 240, {fit: encoder.objectFit})
+    }
     
-    if(selectedMode == mode.ROBOT_36) encoder.sampleCalibrationHeader(8)
-    else if(selectedMode == mode.ROBOT_72) encoder.sampleCalibrationHeader(12)
+    if(selectedMode == mode.ROBOT_36) encoder.sampleCalibrate(8)
+    else if(selectedMode == mode.ROBOT_72) encoder.sampleCalibrate(12)
 
     const { data, info } = await img.raw().toBuffer({ resolveWithObject: true })
     let yScanDuration: number, uvScanDuration: number, porchFreq: number

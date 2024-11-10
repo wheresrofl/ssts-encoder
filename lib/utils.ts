@@ -1,10 +1,6 @@
 import { Sharp } from "sharp";
 import { objectFit, sampleFunction } from "./types";
 
-export function resizeImage(img: Sharp, width: number | null, height: number | null, objectFit: objectFit) {
-    return img.resize(width, height, { fit: objectFit })
-}
-
 export function rgb2yuv(r: number, g: number, b: number): number[]{
     return [
         16.0 + (.003906 * ((65.738 * r) + (129.057 * g) + (25.064 * b))),
