@@ -3,7 +3,7 @@ import { rgb2yuv, scanlineGenerator, yuv2freq } from '../lib/utils'
 
 const robotEncoder: encoderFunction = async (selectedMode, img, encoder) => {
     if(encoder.resizeImage) img.resize(320, 240, {fit: encoder.objectFit}) 
-        const { data, info } = await img.raw().toBuffer({ resolveWithObject: true })
+    const { data, info } = await img.raw().toBuffer({ resolveWithObject: true })
 
     if(selectedMode == mode.ROBOT_36) encoder.sampleCalibrate(8)
     else if(selectedMode == mode.ROBOT_72) encoder.sampleCalibrate(12)
