@@ -5,9 +5,12 @@ import encoder from "./encoder";
 export type objectFit = 'cover' | 'contain' | 'inside' | 'outside';
 
 export enum mode {
-    // ROBOT modes
+    // ROBOT
     ROBOT_36,
     ROBOT_72,
+
+    // WRASSE
+    SC2_180,
 
     // @TODO: add more
 }
