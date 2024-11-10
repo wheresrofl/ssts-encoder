@@ -15,5 +15,12 @@
   "bugs": {
     "url": "https://github.com/wheresrofl/sstv-encoder/issues"
   },
-  "homepage": "https://github.com/wheresrofl/sstv-encoder#readme"
+  "homepage": "https://github.com/wheresrofl/sstv-encoder#readme",
+  "dependencies": {
+    "sharp": "^0.33.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.9.0",
+    "typescript": "^5.6.3"
+  }
 }
