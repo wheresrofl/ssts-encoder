@@ -1,80 +1,79 @@
-import { encoderFunction, mode, sampleFunction, sampleTuple } from '../lib/types';
-import { resizeImage, rgb2yuv, sampleCalibrate, sstvHeader, yuv2freq } from '../lib/utils';
+import { encoderFunction, mode, sampleFunction, sampleTuple } from '../lib/types'
+import { resizeImage, rgb2yuv, yuv2freq } from '../lib/utils'
 
-function scanLine(line: number[], n_samples: number, scale: number, sample: sampleFunction) {
-    for (let i = 0; i < n_samples; ++i) {
-        sample(line[Math.floor(scale * i)], null);
+const robotEncoder: encoderFunction = async (selectedMode, img, encoder) => {
+    if(encoder.resizeImage) img = resizeImage(img, null, 240, encoder.objectFit)
+    
+    if(selectedMode == mode.ROBOT_36) encoder.sampleCalibrationHeader(8)
+    else if(selectedMode == mode.ROBOT_72) encoder.sampleCalibrationHeader(12)
+
+    const { data, info } = await img.raw().toBuffer({ resolveWithObject: true })
+    let yScanDuration: number, uvScanDuration: number, porchFreq: number
+
+    if(selectedMode == mode.ROBOT_36){
+        yScanDuration = 88
+        uvScanDuration = 44
+        porchFreq = 1500
+    }else if(selectedMode == mode.ROBOT_72){
+        yScanDuration = 138
+        uvScanDuration = 69
+        porchFreq = 1900
+    }else{
+        throw Error('Invalid ROBOT mode')
+    }
+    
+    const
+        syncPulse: sampleTuple = [ 1200, 9 ],
+        syncPorch: sampleTuple = [ 1500, 3 ],
+        separationPulse: sampleTuple = [ 1500, 4.5 ],
+        oddSeparationPulse: sampleTuple = [ 2300, 4.5 ],
+        porch: sampleTuple = [ porchFreq, 1.5 ]
+
+    const
+        ySamples = encoder.sampleRate * (yScanDuration / 1000.0),
+        yScale = info.width / ySamples,
+        uvSamples = encoder.sampleRate * (uvScanDuration / 1000.0),
+        uvScale = info.width / uvSamples
+    
+    function scanLine(line: number[], n_samples: number, scale: number){
+        for(let i = 0; i < n_samples; ++i)
+            encoder.sample(line[Math.floor(scale * i)], null)
+    }
+
+    for(let y = 0; y < info.height; ++y){
+        const isEven = y % 2 == 0
+
+        // create yuv scans, where [0,1,2] = [y,u,v] scans of the line
+        const yuvScans: number[][] = [ [], [], [] ]
+        for(let x = 0; x < info.width; ++x){
+            const offset = (y * info.width + x) * info.channels
+            const yuv = rgb2yuv(data[offset], data[offset + 1], data[offset + 2])
+            for(const c in yuv) yuvScans[c].push(yuv2freq(yuv[c]))
+        }
+
+        // sync + y-scans
+        encoder.sample(...syncPulse)
+        encoder.sample(...syncPorch)
+        scanLine(yuvScans[0], ySamples, yScale)
+
+        if(selectedMode == mode.ROBOT_36){
+            // similar to node-sstv, no averaging is taking place -- too much work
+
+            // {u,v}-scan | scan U on even and Y on odds
+            encoder.sample(...(isEven ? separationPulse : oddSeparationPulse))
+            encoder.sample(...porch)
+            scanLine(yuvScans[isEven ? 1 : 2], uvSamples, uvScale)
+        }else if(selectedMode == mode.ROBOT_72){
+            // u-scan
+            encoder.sample(...separationPulse)
+            encoder.sample(...porch)
+            scanLine(yuvScans[1], uvSamples, uvScale)
+
+            // v-scan
+            encoder.sample(...separationPulse)
+            encoder.sample(...porch)
+            scanLine(yuvScans[2], uvSamples, uvScale)
+        }
     }
 }
-
-const robotEncoder: encoderFunction = async (selectedMode, img, fit, sample, sampleRate) => {
-    img = resizeImage(img, null, 240, fit);
-    
-    sstvHeader(sample);
-    if (selectedMode == mode.ROBOT_36) sampleCalibrate(8, sample);
-    else if (selectedMode == mode.ROBOT_72) sampleCalibrate(12, sample);
-
-    const { data, info } = await img.raw().toBuffer({ resolveWithObject: true });
-    let yScanDuration: number, uvScanDuration: number, porchFreq: number;
-
-    if (selectedMode == mode.ROBOT_36) {
-        yScanDuration = 88;
-        uvScanDuration = 44;
-        porchFreq = 1500;
-    } else if (selectedMode == mode.ROBOT_72) {
-        yScanDuration = 138;
-        uvScanDuration = 69;
-        porchFreq = 1900;
-    } else {
-        throw Error('Invalid ROBOT mode');
-    }
-    
-    const syncPulse: sampleTuple = [1200, 9];
-    const syncPorch: sampleTuple = [1500, 3];
-    const separationPulse: sampleTuple = [1500, 4.5];
-    const oddSeparationPulse: sampleTuple = [2300, 4.5];
-    const porch: sampleTuple = [porchFreq, 1.5];
-
-    const ySamples = sampleRate * (yScanDuration / 1000.0);
-    const yScale = info.width / ySamples;
-    const uvSamples = sampleRate * (uvScanDuration / 1000.0);
-    const uvScale = info.width / uvSamples;
-    
-    for (let y = 0; y < info.height; ++y) {
-        const isEven = y % 2 == 0;
-
-        // create YUV scans: [0,1,2] -> [Y,U,V]
-        const yuvScans: number[][] = [[], [], []];
-        for (let x = 0; x < info.width; ++x) {
-            const offset = (y * info.width + x) * info.channels;
-            const yuv = rgb2yuv(data[offset], data[offset + 1], data[offset + 2]);
-            for (const c in yuv) yuvScans[c].push(yuv2freq(yuv[c]));
-        }
-
-        // sync + Y-scans
-        sample(...syncPulse);
-        sample(...syncPorch);
-        scanLine(yuvScans[0], ySamples, yScale, sample);
-
-        if (selectedMode == mode.ROBOT_36) {
-            // U,V scan: U on even, V on odd lines
-            sample(...(isEven ? separationPulse : oddSeparationPulse));
-            sample(...porch);
-            scanLine(yuvScans[isEven ? 1 : 2], uvSamples, uvScale, sample);
-        } else if (selectedMode == mode.ROBOT_72) {
-            // Both U and V use separation pulse for better quality
-
-            // U-scan
-            sample(...separationPulse);
-            sample(...porch);
-            scanLine(yuvScans[1], uvSamples, uvScale, sample);
-
-            // V-scan
-            sample(...separationPulse);
-            sample(...porch);
-            scanLine(yuvScans[2], uvSamples, uvScale, sample);
-        }
-    }
-};
-
-export default robotEncoder;
+export default robotEncoder

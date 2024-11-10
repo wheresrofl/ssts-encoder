@@ -27,7 +27,7 @@ export default class encoder {
     }
 
     // this logic was mostly transcribed from echicken/node-sstv
-    private sample: sampleFunction = (frequency: number, duration: number | null) => {
+    sample: sampleFunction = (frequency: number, duration: number | null) => {
         const n_samples = duration ? (this.sampleRate * (duration / 1000.0)) : 1
         for (let i = 0; i < n_samples; ++i) {
             this.samples.push(Math.sin(this.phase))
@@ -37,7 +37,7 @@ export default class encoder {
     }
 
     async encode(selectedMode: mode, image: string | Buffer | sharp.Sharp): Promise<Buffer> {
-        this.reset()
+        this.reset() // just to ensure clean slate
 
         // get the sharp image
         console.time('image.load')
@@ -46,18 +46,15 @@ export default class encoder {
         else img = image // assume it is a sharp.Sharp otherwise
         console.timeEnd('image.load')
 
-        // encode the image
         console.time('encode')
         await getEncoder(selectedMode)!(
             selectedMode,
             img,
-            this.resizeImage ? this.objectFit : null,
-            this.sample.bind(this),
-            this.sampleRate
+            this
         )
         console.timeEnd('encode')
 
-        // @TODO: create a sample writer
+        // TODO: create a sample writer
         console.time('buffer.aloc')
         const buffer = Buffer.alloc(this.samples.length * 4)
         console.timeEnd('buffer.aloc')
@@ -68,5 +65,33 @@ export default class encoder {
         }
         console.timeEnd('buffer.write')
         return buffer
+    }
+
+    sampleCalibrate(visCode: number, prependHeader: boolean = true) {
+        if (prependHeader) {
+            this.sample(1900, 100)
+            this.sample(1500, 100)
+            this.sample(1900, 100)
+            this.sample(1500, 100)
+            this.sample(2300, 100)
+            this.sample(1500, 100)
+            this.sample(2300, 100)
+            this.sample(1500, 100)
+        }
+
+        this.sample(1900, 300) // Leader tone
+        this.sample(1200, 10)  // Break
+        this.sample(1900, 300) // Leader Tone
+        this.sample(1200, 30)  // VIS Start Bit
+
+        let isEven = false
+        for (let i = 0; i < 7; ++i) {
+            const mask = (visCode & (1 << i)) != 0
+            this.sample(mask ? 1100 : 1300, 30)
+            if (mask) isEven = !isEven
+        }
+        this.sample(isEven ? 1300 : 1100, 30)
+
+        this.sample(1200, 30)
     }
 }

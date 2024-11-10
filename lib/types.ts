@@ -1,4 +1,5 @@
 import { Sharp } from "sharp";
+import encoder from "./encoder";
 
 // fitEnum
 export type objectFit = 'cover' | 'contain' | 'inside' | 'outside';
@@ -45,4 +46,4 @@ export type sampleFunction = (frequency: number, duration: number | null) => voi
 
 export type sampleTuple = [number, number];
 
-export type encoderFunction = (mode: mode, image: Sharp, objectFit: objectFit | null, sample: sampleFunction, sampleRate: number) => Promise<void>;
+export type encoderFunction = (mode: mode, image: Sharp, encoder: encoder) => Promise<void>
